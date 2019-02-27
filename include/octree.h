@@ -2,9 +2,13 @@
 #define OCTREE_H
 
 #include <eigen3/Eigen/Geometry>
+#include <limits>
+#include <queue>
 
 class octree{
 #define ISLEAF 1<<0
+#define CHECKA 1<<1
+#define CHECKB 1<<2
 
 
 public: class node;
@@ -45,7 +49,15 @@ public: class node{
         float extendForward(int dir);
     };
 
+    class distAndPointer{
+    public:
+        float dist;
+        node* aNode;
+        bounds bound;
 
+
+
+    };
 
     int levels;
     int batch;
@@ -79,13 +91,44 @@ public: class node{
     bool isLeaf(node* aNode){
         return aNode->nodeInfo & ISLEAF!=0;
     }
+    bool hasCheckA(node* aNode){
+        return aNode->nodeInfo & CHECKA!=0;
+    }
+    bool hasCheckB(node* aNode){
+        return aNode->nodeInfo & CHECKB!=0;
+    }
+    bool setCheckA(node* aNode){
+        head->nodeInfo | CHECKA;
+    }
+    bool setCheckB(node* aNode){
+        head->nodeInfo | CHECKB;
+    }
+    bool clearCheckA(node* aNode){
+        aNode->nodeInfo = aNode->nodeInfo & (~ CHECKA);
+    }
+    bool clearCheckB(node* aNode){
+       aNode->nodeInfo = aNode->nodeInfo & (~ CHECKB);
+    }
     int redistribute(node* aNode);
     int compact(node* aNode);
     int cullNode(node* aNode);
     float spaceLeft() { return (float)freeNodeStackPtr/totalNodes;}
 
     std::vector<octree::dataPtr> getNnearest(Eigen::Vector3f point, int N);
+
+    octree::dataPtr getNearest(Eigen::Vector3f target);
+    Eigen::Vector3f nearestPointOnCube(Eigen::Vector3f point, octree::bounds  bound);
+    octree::node* getWouldBeNode(node *aNode, Eigen::Vector3f target, bounds &bound);
+    void putOnQueue(node* aNode);
+
 };
+
+ inline bool operator <(const octree::distAndPointer &lhs,const octree::distAndPointer &rhs)
+{
+    return lhs.dist < rhs.dist;
+}
+
+
 
 
 

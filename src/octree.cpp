@@ -108,9 +108,7 @@ int octree::cullNode(node* aNode){
 }
 
 
-std::vector<octree::dataPtr> getNnearest(Eigen::Vector3f point, int N){
 
-}
 
 //functions related to bounds
 // We use ROS coordinates as a standard, Z up, X forward, Y left
@@ -167,22 +165,42 @@ void octree::bounds::downScale(int direction){
 
 int octree::bounds::whichDir(Eigen::Vector3f point){
     Eigen::Vector3f mid = min + (max - min)/2.0;
-    if(point[0] >= mid[0] && point[1] >= mid[1] && point[2] >= mid[2]) return 0;
-
-    if(point[0] >= mid[0] && point[1] < mid[1] && point[2] >= mid[2]) return 1;
-
-    if(point[0] < mid[0] && point[1] < mid[1] && point[2] >= mid[2]) return 2;
-
-    if(point[0] < mid[0] && point[1] >= mid[1] && point[2] >= mid[2]) return 3;
-
-    if(point[0] >= mid[0] && point[1] >= mid[1] && point[2] < mid[2]) return 4;
-
-    if(point[0] >= mid[0] && point[1] < mid[1] && point[2] < mid[2]) return 5;
-
-    if(point[0] < mid[0] && point[1] < mid[1] && point[2] < mid[2]) return 6;
-
-    if(point[0] < mid[0] && point[1] >= mid[1] && point[2] < mid[2]) return 7;
-
+    if(point[0] >= mid[0]){
+        if(point[1]>=mid[1]){
+            if(point[2] >=mid[2]){
+                return 0;
+            }
+            else{
+                return 4;
+            }
+        }
+        else{
+            if(point[2] >=mid[2]){
+                return 1;
+            }
+            else{
+                return 5;
+            }
+        }
+    }
+    else{
+        if(point[1]>=mid[1]){
+            if(point[2] >=mid[2]){
+                return 3;
+            }
+            else{
+                return 7;
+            }
+        }
+        else{
+            if(point[2] >=mid[2]){
+                return 2;
+            }
+            else{
+                return 6;
+            }
+        }
+    }
     return -1;
 }
 
@@ -278,3 +296,94 @@ void octree::deallocateNode(node* aNode){
     freeNodeCount ++;
     return;
 }
+
+octree::node* octree::getWouldBeNode(node* aNode,Eigen::Vector3f target,octree::bounds &bound){
+    if(isLeaf(aNode)){
+        return aNode;
+    }
+    else{
+        int dir = bound.whichDir(target);
+        bound.downScale(dir);
+        return getWouldBeNode(aNode->pointers.nodes[dir],target,bound);
+    }
+}
+
+Eigen::Vector3f octree::nearestPointOnCube(Eigen::Vector3f point, octree::bounds  bound){
+
+}
+
+void octree::putOnQueue(node* aNode){
+
+}
+
+
+std::vector<octree::dataPtr> octree::getNnearest(Eigen::Vector3f point, int N){
+    std::priority_queue<distAndPointer,std::vector<distAndPointer>, std::less<distAndPointer>  > pq;
+    distAndPointer headDistPtr;
+    headDistPtr.aNode = head;
+    headDistPtr.bound.max = centre + Eigen::Vector3f(range,range,range);
+    headDistPtr.bound.min = centre - Eigen::Vector3f(range,range,range);
+    //preload the head.
+    if(isLeaf(headDistPtr.aNode)){
+        setCheckA(headDistPtr.aNode);
+        setCheckB(headDistPtr.aNode);
+        distAndPointer headDistPtrA;
+        headDistPtrA.aNode = headDistPtr.aNode;
+       headDistPtrA.dist = (headDistPtrA.aNode->pointers.data.data[0].point - point).norm();
+       pq.push(headDistPtrA);
+       distAndPointer headDistPtrB;
+       headDistPtrB.aNode = headDistPtr.aNode;
+      headDistPtrB.dist = (headDistPtrA.aNode->pointers.data.data[1].point - point).norm();
+      pq.push(headDistPtrB);
+    }
+    else{
+        headDistPtr.dist = 0;
+        pq.push(headDistPtr);
+    }
+
+
+    std::vector<octree::dataPtr> returnVec;
+    while(!pq.empty() || !(returnVec.size() >= N)){
+        distAndPointer toConsider = pq.top();
+        pq.pop();
+        if(isLeaf(toConsider.aNode) && (!hasCheckB(toConsider.aNode) || !hasCheckA(toConsider.aNode))){
+            setCheckA(toConsider.aNode);
+            setCheckB(toConsider.aNode);
+            if(toConsider.aNode->pointers.data.data[0].data != NULL  || !hasCheckA(toConsider.aNode)){
+                distAndPointer distAndPointA;
+                distAndPointA.aNode = toConsider.aNode;
+                distAndPointA.bound = toConsider.bound;
+               distAndPointA.dist = (distAndPointA.aNode->pointers.data.data[0].point - point).norm();
+               pq.push(distAndPointA);
+            }
+            if(toConsider.aNode->pointers.data.data[1].data != NULL  || !hasCheckB(toConsider.aNode)){
+                distAndPointer distAndPointB;
+                distAndPointB.aNode = toConsider.aNode;
+                distAndPointB.bound = toConsider.bound;
+               distAndPointB.dist = (distAndPointB.aNode->pointers.data.data[1].point - point).norm();
+               pq.push(distAndPointB);
+            }
+        }
+        else if(isLeaf(toConsider.aNode)){
+            // work out if it is the left or right one.
+            float distA = (toConsider.aNode->pointers.data.data[0].point - point).norm();
+            float distB = (toConsider.aNode->pointers.data.data[1].point - point).norm();
+            if(distA == toConsider.dist) returnVec.push_back(toConsider.aNode->pointers.data.data[0]);
+            else if(distB == toConsider.dist) returnVec.push_back(toConsider.aNode->pointers.data.data[1]);
+            continue;
+        }
+        //this  is an octant node. put the children on the list, with the dist value set to the minimum possible.
+        else if(!isLeaf(toConsider.aNode)){
+            for(int i = 0; i < 8; i++){
+                if(toConsider.aNode->pointers.nodes[i] != NULL){
+                    distAndPointer thisDistAndPtr;
+                    thisDistAndPtr.bound = toConsider.bound;
+                    thisDistAndPtr.bound.downScale(i);
+                    thisDistAndPtr.dist = (point - nearestPointOnCube(point, thisDistAndPtr.bound)).norm();
+                }
+            }
+        }
+    }
+
+}
+
