@@ -309,6 +309,29 @@ octree::node* octree::getWouldBeNode(node* aNode,Eigen::Vector3f target,octree::
 }
 
 Eigen::Vector3f octree::nearestPointOnCube(Eigen::Vector3f point, octree::bounds  bound){
+    bool nearX = false;
+    bool farX = false;
+    bool nearY = false;
+    bool farY = false;
+    bool nearZ = false;
+    bool farZ = false;
+    if(point[0] < bound.min[0]) nearX = true;
+    if(point[1] < bound.min[1]) nearY = true;
+    if(point[2] < bound.min[2]) nearZ = true;
+    if(point[0] >= bound.max[0]) farX = true;
+    if(point[1] >= bound.max[1]) farY = true;
+    if(point[2] >= bound.max[2]) farZ = true;
+
+    Eigen::Vector3f retVec = point;
+
+    if(farX) retVec[0] = bound.max[0];
+    if(farY) retVec[1] = bound.max[1];
+    if(farZ) retVec[2] = bound.max[2];
+    if(nearX) retVec[0] = bound.min[0];
+    if(nearY) retVec[1] = bound.min[1];
+    if(nearZ) retVec[2] = bound.min[2];
+
+    return retVec;
 
 }
 
@@ -318,7 +341,7 @@ void octree::putOnQueue(node* aNode){
 
 
 std::vector<octree::dataPtr> octree::getNnearest(Eigen::Vector3f point, int N){
-    std::priority_queue<distAndPointer,std::vector<distAndPointer>, std::less<distAndPointer>  > pq;
+    std::priority_queue<distAndPointer,std::vector<distAndPointer>, std::greater<distAndPointer>  > pq;
     distAndPointer headDistPtr;
     headDistPtr.aNode = head;
     headDistPtr.bound.max = centre + Eigen::Vector3f(range,range,range);
@@ -327,14 +350,18 @@ std::vector<octree::dataPtr> octree::getNnearest(Eigen::Vector3f point, int N){
     if(isLeaf(headDistPtr.aNode)){
         setCheckA(headDistPtr.aNode);
         setCheckB(headDistPtr.aNode);
-        distAndPointer headDistPtrA;
-        headDistPtrA.aNode = headDistPtr.aNode;
-       headDistPtrA.dist = (headDistPtrA.aNode->pointers.data.data[0].point - point).norm();
-       pq.push(headDistPtrA);
+        if(headDistPtr.aNode->pointers.data.data[0].data != NULL){
+            distAndPointer headDistPtrA;
+            headDistPtrA.aNode = headDistPtr.aNode;
+           headDistPtrA.dist = (headDistPtrA.aNode->pointers.data.data[0].point - point).norm();
+           pq.push(headDistPtrA);
+        }
+        if(headDistPtr.aNode->pointers.data.data[1].data != NULL){
        distAndPointer headDistPtrB;
        headDistPtrB.aNode = headDistPtr.aNode;
-      headDistPtrB.dist = (headDistPtrA.aNode->pointers.data.data[1].point - point).norm();
+      headDistPtrB.dist = (headDistPtrB.aNode->pointers.data.data[1].point - point).norm();
       pq.push(headDistPtrB);
+       }
     }
     else{
         headDistPtr.dist = 0;
@@ -343,20 +370,20 @@ std::vector<octree::dataPtr> octree::getNnearest(Eigen::Vector3f point, int N){
 
 
     std::vector<octree::dataPtr> returnVec;
-    while(!pq.empty() || !(returnVec.size() >= N)){
+    while(!pq.empty() && !(returnVec.size() >= N)){
         distAndPointer toConsider = pq.top();
         pq.pop();
         if(isLeaf(toConsider.aNode) && (!hasCheckB(toConsider.aNode) || !hasCheckA(toConsider.aNode))){
             setCheckA(toConsider.aNode);
             setCheckB(toConsider.aNode);
-            if(toConsider.aNode->pointers.data.data[0].data != NULL  || !hasCheckA(toConsider.aNode)){
+            if(toConsider.aNode->pointers.data.data[0].data != NULL){
                 distAndPointer distAndPointA;
                 distAndPointA.aNode = toConsider.aNode;
                 distAndPointA.bound = toConsider.bound;
                distAndPointA.dist = (distAndPointA.aNode->pointers.data.data[0].point - point).norm();
                pq.push(distAndPointA);
             }
-            if(toConsider.aNode->pointers.data.data[1].data != NULL  || !hasCheckB(toConsider.aNode)){
+            if(toConsider.aNode->pointers.data.data[1].data != NULL){
                 distAndPointer distAndPointB;
                 distAndPointB.aNode = toConsider.aNode;
                 distAndPointB.bound = toConsider.bound;
@@ -366,8 +393,12 @@ std::vector<octree::dataPtr> octree::getNnearest(Eigen::Vector3f point, int N){
         }
         else if(isLeaf(toConsider.aNode)){
             // work out if it is the left or right one.
-            float distA = (toConsider.aNode->pointers.data.data[0].point - point).norm();
-            float distB = (toConsider.aNode->pointers.data.data[1].point - point).norm();
+            float distA =std::numeric_limits<float>::max();
+            if(toConsider.aNode->pointers.data.data[0].data != NULL) distA = (toConsider.aNode->pointers.data.data[0].point - point).norm();
+
+            float distB =std::numeric_limits<float>::max();
+            if(toConsider.aNode->pointers.data.data[1].data != NULL) distB = (toConsider.aNode->pointers.data.data[1].point - point).norm();
+
             if(distA == toConsider.dist) returnVec.push_back(toConsider.aNode->pointers.data.data[0]);
             else if(distB == toConsider.dist) returnVec.push_back(toConsider.aNode->pointers.data.data[1]);
             continue;
@@ -379,11 +410,14 @@ std::vector<octree::dataPtr> octree::getNnearest(Eigen::Vector3f point, int N){
                     distAndPointer thisDistAndPtr;
                     thisDistAndPtr.bound = toConsider.bound;
                     thisDistAndPtr.bound.downScale(i);
+                    thisDistAndPtr.aNode = toConsider.aNode->pointers.nodes[i];
                     thisDistAndPtr.dist = (point - nearestPointOnCube(point, thisDistAndPtr.bound)).norm();
+                    pq.push(thisDistAndPtr);
                 }
             }
         }
     }
+    return returnVec;
 
 }
 

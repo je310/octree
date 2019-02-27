@@ -14,8 +14,8 @@ typedef octree::node nodeType;
 
 
 int main(int argc, char** argv) {
-    int nodeNumber = 1000000;
-        float dataOverhead = 1.05;
+    int nodeNumber = 20000;
+        float dataOverhead = 2.0;
     int bufferNum = (int)(nodeNumber*dataOverhead);
     int nodeBuffer2[bufferNum];
     Eigen::Vector3f centre(0,0,0);
@@ -51,16 +51,36 @@ int main(int argc, char** argv) {
     bound.upScale(1);
     if(bound.max !=Vector3f(1,1,1) && bound.min != Vector3f(0,0,0)) cout << "error upscale and downscale" << endl;
 
+//    for(int i = 0; i < nodeNumber; i++){
+//        //Eigen::Vector3f randVec(1.0*(float)rand()/RAND_MAX,1.0*(float)rand()/RAND_MAX,1.0*(float)rand()/RAND_MAX);
+//        Eigen::Vector3f randVec(1.0*(float)rand()/RAND_MAX,1.0*(float)rand()/RAND_MAX,1.0*(float)rand()/RAND_MAX);
+//        dataBuffer[i] = i;
+//        octree::dataPtr data;
+//        data.data = dataBuffer[i];
+//        data.point = randVec;
+//        int depth = myOct.insert(data);
+//        cout << depth << endl;
+
+//    }
+    float rad = 1.0/nodeNumber;
+    float radInc = rad*0.7;
     for(int i = 0; i < nodeNumber; i++){
         //Eigen::Vector3f randVec(1.0*(float)rand()/RAND_MAX,1.0*(float)rand()/RAND_MAX,1.0*(float)rand()/RAND_MAX);
-        Eigen::Vector3f randVec(1.0*(float)rand()/RAND_MAX,1.0*(float)rand()/RAND_MAX,1.0*(float)rand()/RAND_MAX);
-        dataBuffer[i] = i;
+        Eigen::Vector3f randVec(2.0*(float)rand()/RAND_MAX,2.0*(float)rand()/RAND_MAX,2.0*(float)rand()/RAND_MAX);
+        randVec -= Eigen::Vector3f(1,1,1);
+        randVec.normalize();
+        dataBuffer[i] = i+1;
         octree::dataPtr data;
         data.data = dataBuffer[i];
-        data.point = randVec;
+        data.point = rad*randVec + centre;
         int depth = myOct.insert(data);
-        cout << depth << endl;
+        rad += radInc;
 
+    }
+    int toFind = nodeNumber / 2;
+    std::vector<octree::dataPtr> list =  myOct.getNnearest(centre,toFind);
+    for(int i = 0; i < toFind; i++){
+        if(list[i].data != i+1) cout << "wrong order!" << endl;
     }
     cout << "finished";
     cout << "finished";

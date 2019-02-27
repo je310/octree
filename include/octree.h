@@ -27,7 +27,7 @@ public: union pBatch {
 public: class node{
 
         public:
-        char nodeInfo;  // this will define some properties of the octree node. for instance we can change whether this is considered a leaf node.
+        int nodeInfo;  // this will define some properties of the octree node. for instance we can change whether this is considered a leaf node.
                         // If it is a leaf node then the pointers act as pointers to data.
         int dataBelow;
         node* parent;
@@ -89,19 +89,19 @@ public: class node{
     void initLeaf(node* aNode);
     int remove(dataPtr data);
     bool isLeaf(node* aNode){
-        return aNode->nodeInfo & ISLEAF!=0;
+        return (aNode->nodeInfo & ISLEAF)!=0;
     }
     bool hasCheckA(node* aNode){
-        return aNode->nodeInfo & CHECKA!=0;
+        return (aNode->nodeInfo & CHECKA)!=0;
     }
     bool hasCheckB(node* aNode){
-        return aNode->nodeInfo & CHECKB!=0;
+        return (aNode->nodeInfo & CHECKB)!=0;
     }
     bool setCheckA(node* aNode){
-        head->nodeInfo | CHECKA;
+        aNode->nodeInfo = aNode->nodeInfo | CHECKA;
     }
     bool setCheckB(node* aNode){
-        head->nodeInfo | CHECKB;
+       aNode->nodeInfo =  aNode->nodeInfo | CHECKB;
     }
     bool clearCheckA(node* aNode){
         aNode->nodeInfo = aNode->nodeInfo & (~ CHECKA);
@@ -123,9 +123,9 @@ public: class node{
 
 };
 
- inline bool operator <(const octree::distAndPointer &lhs,const octree::distAndPointer &rhs)
+ inline bool operator >(const octree::distAndPointer &lhs,const octree::distAndPointer &rhs)
 {
-    return lhs.dist < rhs.dist;
+    return lhs.dist > rhs.dist;
 }
 
 
