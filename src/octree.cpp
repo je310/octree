@@ -81,6 +81,7 @@ int octree::insert(dataPtr data){
 }
 
 void octree::initLeaf(node* aNode){
+    aNode->nodeInfo  = 0;
     aNode->nodeInfo = head->nodeInfo | ISLEAF;
     for(int i = 0; i < 8; i++){
         aNode->pointers.nodes[i] = NULL;
@@ -429,12 +430,14 @@ std::vector<octree::dataPtr> octree::getNnearest(Eigen::Vector3f point, int N){
 
     headDistPtr.dist = 0;
     pq.push(headDistPtr);
+    std::vector<node*> touchedVec;
 
     std::vector<octree::dataPtr> returnVec;
     while(!pq.empty() && !(returnVec.size() >= N)){
         distAndPointer toConsider = pq.top();
         pq.pop();
         if(isLeaf(toConsider.aNode) && (!hasCheckB(toConsider.aNode) || !hasCheckA(toConsider.aNode))){
+
             setCheckA(toConsider.aNode);
             setCheckB(toConsider.aNode);
             if(toConsider.aNode->pointers.data.data[0].data != NULL){
@@ -453,6 +456,8 @@ std::vector<octree::dataPtr> octree::getNnearest(Eigen::Vector3f point, int N){
             }
         }
         else if(isLeaf(toConsider.aNode)){
+
+
             // work out if it is the left or right one.
             float distA =std::numeric_limits<float>::max();
             if(toConsider.aNode->pointers.data.data[0].data != NULL) distA = (toConsider.aNode->pointers.data.data[0].point - point).norm();
@@ -460,8 +465,15 @@ std::vector<octree::dataPtr> octree::getNnearest(Eigen::Vector3f point, int N){
             float distB =std::numeric_limits<float>::max();
             if(toConsider.aNode->pointers.data.data[1].data != NULL) distB = (toConsider.aNode->pointers.data.data[1].point - point).norm();
 
-            if(distA == toConsider.dist) returnVec.push_back(toConsider.aNode->pointers.data.data[0]);
-            else if(distB == toConsider.dist) returnVec.push_back(toConsider.aNode->pointers.data.data[1]);
+            if(distA == toConsider.dist){
+                returnVec.push_back(toConsider.aNode->pointers.data.data[0]);
+
+            }
+            else if(distB == toConsider.dist){
+                returnVec.push_back(toConsider.aNode->pointers.data.data[1]);
+            }
+            touchedVec.push_back(toConsider.aNode);
+
             continue;
         }
         //this  is an octant node. put the children on the list, with the dist value set to the minimum possible.
@@ -477,6 +489,16 @@ std::vector<octree::dataPtr> octree::getNnearest(Eigen::Vector3f point, int N){
                 }
             }
         }
+    }
+    //tidy up checked markers, only elements in the list or in the final vector should have been tagged.
+    while(!pq.empty()){
+        clearCheckA(pq.top().aNode);
+        clearCheckB(pq.top().aNode);
+        pq.pop();
+    }
+    for(int i = 0; i < touchedVec.size(); i++){
+        clearCheckA(touchedVec[i]);
+        clearCheckB(touchedVec[i]);
     }
     return returnVec;
 

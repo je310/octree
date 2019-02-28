@@ -73,6 +73,7 @@ int main(int argc, char** argv) {
     }
     int toFind = nodeNumber / 2;
     std::vector<octree::dataPtr> list =  myOct.getNnearest(centre,toFind);
+    list =  myOct.getNnearest(centre,toFind);
     for(int i = 0; i < toFind; i++){
         if(list[i].data != i+1) cout << "wrong order!" << endl;
     }

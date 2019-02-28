@@ -6,9 +6,9 @@
 #include <queue>
 
 class octree{
-#define ISLEAF 1<<0
-#define CHECKA 1<<1
-#define CHECKB 1<<2
+#define ISLEAF (1<<0)
+#define CHECKA (1<<1)
+#define CHECKB (1<<2)
 
 
 public: class node;
