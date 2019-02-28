@@ -12,7 +12,7 @@ class octree{
 
 
 public: class node;
-    public: struct dataPtr{
+public: struct dataPtr{
         Eigen::Vector3f point;
         int data;
     };
@@ -20,15 +20,15 @@ public: class node;
         dataPtr data[2];
     };
 public: union pBatch {
-    node* nodes[8];
-    dataPtrs data;
-    pBatch(){new(&data) dataPtrs();}
-};
+        node* nodes[8];
+        dataPtrs data;
+        pBatch(){new(&data) dataPtrs();}
+    };
 public: class node{
 
-        public:
+    public:
         int nodeInfo;  // this will define some properties of the octree node. for instance we can change whether this is considered a leaf node.
-                        // If it is a leaf node then the pointers act as pointers to data.
+        // If it is a leaf node then the pointers act as pointers to data.
         int dataBelow;
         node* parent;
         pBatch pointers;
@@ -73,7 +73,7 @@ public: class node{
     node* head;
     node* scrapHead;
     int currentDepth;
-//    typedef nodeBatch node*[8];
+    //    typedef nodeBatch node*[8];
 
 
 
@@ -102,13 +102,13 @@ public: class node{
         aNode->nodeInfo = aNode->nodeInfo | CHECKA;
     }
     bool setCheckB(node* aNode){
-       aNode->nodeInfo =  aNode->nodeInfo | CHECKB;
+        aNode->nodeInfo =  aNode->nodeInfo | CHECKB;
     }
     bool clearCheckA(node* aNode){
         aNode->nodeInfo = aNode->nodeInfo & (~ CHECKA);
     }
     bool clearCheckB(node* aNode){
-       aNode->nodeInfo = aNode->nodeInfo & (~ CHECKB);
+        aNode->nodeInfo = aNode->nodeInfo & (~ CHECKB);
     }
     int redistribute(node* aNode);
     int compact(node* aNode);
@@ -122,12 +122,12 @@ public: class node{
     octree::bounds defaultBounds();
 };
 
- inline bool operator >(const octree::distAndPointer &lhs,const octree::distAndPointer &rhs)
+inline bool operator >(const octree::distAndPointer &lhs,const octree::distAndPointer &rhs)
 {
     return lhs.dist > rhs.dist;
 }
 
- inline bool operator ==(const octree::dataPtr &lhs,const octree::dataPtr &rhs)
+inline bool operator ==(const octree::dataPtr &lhs,const octree::dataPtr &rhs)
 {
     return lhs.data == rhs.data && lhs.point == rhs.point;
 }

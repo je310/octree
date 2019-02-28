@@ -15,7 +15,7 @@ typedef octree::node nodeType;
 
 int main(int argc, char** argv) {
     int nodeNumber = 10;
-        float dataOverhead = 2.0;
+    float dataOverhead = 2.0;
     int bufferNum = (int)(nodeNumber*dataOverhead);
     int nodeBuffer2[bufferNum];
     Eigen::Vector3f centre(0,0,0);

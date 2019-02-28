@@ -444,15 +444,15 @@ std::vector<octree::dataPtr> octree::getNnearest(Eigen::Vector3f point, int N){
                 distAndPointer distAndPointA;
                 distAndPointA.aNode = toConsider.aNode;
                 distAndPointA.bound = toConsider.bound;
-               distAndPointA.dist = (distAndPointA.aNode->pointers.data.data[0].point - point).norm();
-               pq.push(distAndPointA);
+                distAndPointA.dist = (distAndPointA.aNode->pointers.data.data[0].point - point).norm();
+                pq.push(distAndPointA);
             }
             if(toConsider.aNode->pointers.data.data[1].data != NULL){
                 distAndPointer distAndPointB;
                 distAndPointB.aNode = toConsider.aNode;
                 distAndPointB.bound = toConsider.bound;
-               distAndPointB.dist = (distAndPointB.aNode->pointers.data.data[1].point - point).norm();
-               pq.push(distAndPointB);
+                distAndPointB.dist = (distAndPointB.aNode->pointers.data.data[1].point - point).norm();
+                pq.push(distAndPointB);
             }
         }
         else if(isLeaf(toConsider.aNode)){
