@@ -93,6 +93,7 @@ void octree::initLeaf(node* aNode){
 bool octree::remove(dataPtr data ){
     node* aNode = getNode(data);
     if(aNode != NULL){
+        if(!isLeaf(aNode)) std::cout << "removing not a leaf!";
         int countDec = 0;
         if(aNode->pointers.data.data[0] == data){
             aNode->pointers.data.data[0].data = NULL;
@@ -102,10 +103,12 @@ bool octree::remove(dataPtr data ){
             aNode->pointers.data.data[1].data = NULL;
             countDec ++;
         }
+        if(countDec == 2) std::cout << "duplicated data at node" <<std::endl;
         iterateDecCount(aNode,countDec);
         compact(aNode->parent);
         return true;
     }
+    else  std::cout << "requested missing data";
     return false;
 }
 
@@ -149,23 +152,36 @@ int octree::redistribute(node* aNode){
 // we also rely on the data structure to be correctly maintained, ie compact called whenever a node is removed etc.
 int octree::compact(node* aNode){
     if(aNode != NULL){
+        node* parent = aNode->parent;
+        // in this case we can convert to a leaf node.
         if(aNode->dataBelow <=2 && !isLeaf(aNode)){
+            if(aNode ->dataBelow ==0){
+
+                std::cout << "calling compact in a strange way" << std::endl;
+            }
             dataPtr ptrs[2];
             int ptrsFound = 0;
+            int nodesCount =0;
             for(int i = 0; i < 8; i++){
                 if(aNode->pointers.nodes[i] != NULL){
+                    nodesCount ++;
+                    int localCount = 0;
                     if(aNode->pointers.nodes[i]->pointers.data.data[0].data != NULL){
                         ptrs[ptrsFound] = aNode->pointers.nodes[i]->pointers.data.data[0];
+                        aNode->pointers.nodes[i]->dataBelow --;
+                        localCount++;
                         ptrsFound++;
                     }
                     if(aNode->pointers.nodes[i]->pointers.data.data[1].data != NULL){
                         ptrs[ptrsFound] = aNode->pointers.nodes[i]->pointers.data.data[1];
+                        aNode->pointers.nodes[i]->dataBelow --;
+                        localCount++;
                         ptrsFound++;
                     }
-
-                    deallocateNode(aNode->pointers.nodes[i]);
-                    aNode->pointers.nodes[i]  = NULL;
-                    //if(ptrsFound == 2) break;
+                    if(aNode->pointers.nodes[i]->dataBelow ==0){
+                        deallocateNode(aNode->pointers.nodes[i]);
+                        aNode->pointers.nodes[i]  = NULL;
+                    }
                 }
             }
             initLeaf(aNode);
@@ -173,8 +189,35 @@ int octree::compact(node* aNode){
             for(int i = 0; i < ptrsFound; i++){
                 aNode->pointers.data.data[i] = ptrs[i];
             }
+            if(aNode->dataBelow == 0) {
+                // remove self from parent
+                if(parent!=NULL){
+                    for(int i = 0; i < 8; i++){
+                        if(parent->pointers.nodes[i] == aNode) parent->pointers.nodes[i] = NULL;
+                    }
+                     deallocateNode(aNode);
+                }
+            }
 
-
+        }
+        if(aNode !=NULL){
+            if(!isLeaf(aNode)){
+                for(int i = 0; i < 8; i++){
+                    if(aNode->pointers.nodes[i] != NULL){
+                        if(aNode->pointers.nodes[i]->dataBelow == 0){
+                            deallocateNode(aNode->pointers.nodes[i]);
+                            aNode->pointers.nodes[i] = NULL;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if(aNode !=NULL){
+        if(aNode->parent!=NULL){
+            if(aNode->parent->dataBelow<=2){
+                compact(aNode->parent);
+            }
         }
     }
 }

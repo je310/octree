@@ -2,7 +2,7 @@
 
 #include <iostream>
 #include <chrono>
-
+#include <ctime>
 #include <math.h>
 #include "octree.h"
 
@@ -14,10 +14,10 @@ typedef octree::node nodeType;
 
 
 int main(int argc, char** argv) {
-    int nodeNumber = 10;
-    float dataOverhead = 2.0;
+    int nodeNumber = 3000;
+    float dataOverhead = 2;
     int bufferNum = (int)(nodeNumber*dataOverhead);
-    int nodeBuffer2[bufferNum];
+    //int nodeBuffer2[bufferNum];
     Eigen::Vector3f centre(0,0,0);
     float range = 1.0;
 
@@ -26,12 +26,11 @@ int main(int argc, char** argv) {
     cout << "size of int" << sizeof(octree::node::nodeInfo)<< endl;
     cout << "size of int" << sizeof(octree::node::parent)<< endl;
     cout << "size of int" << sizeof(octree::node::pointers)<< endl;
-    cout << "size of int" << sizeof(nodeBuffer2)<< endl;
     cout << (int)(nodeNumber*dataOverhead) * sizeof(nodeType) << endl;
-    nodeType nodeBuffer[(int)(nodeNumber*dataOverhead)];
+    nodeType* nodeBuffer = new nodeType[(int)(nodeNumber*dataOverhead)];
     int dataBuffer[nodeNumber];
 
-    octree myOct(32,2,centre,range,&nodeBuffer[0],(int)(nodeNumber*dataOverhead));
+    octree myOct(32,2,centre,range,nodeBuffer,(int)(nodeNumber*dataOverhead));
 
     //tests
     octree::bounds bound;
@@ -56,6 +55,7 @@ int main(int argc, char** argv) {
 
     //test insertion and N-closest, all insertions are given data that is incrementing, and a point that is increasingly far (at random direction) from the test point
     // therefore we know that we must get the elements back in order.
+    clock_t begin = clock();
     float rad = 1.0/nodeNumber;
     float radInc = rad*0.7;
     for(int i = 0; i < nodeNumber; i++){
@@ -71,6 +71,7 @@ int main(int argc, char** argv) {
         rad += radInc;
 
     }
+
     int toFind = nodeNumber / 2;
     std::vector<octree::dataPtr> list =  myOct.getNnearest(centre,toFind);
     list =  myOct.getNnearest(centre,toFind);
@@ -80,7 +81,7 @@ int main(int argc, char** argv) {
 
 
     //test removals
-    nodeType nodeBuffer3[(int)(nodeNumber*dataOverhead)];
+    nodeType* nodeBuffer3 = new nodeType[(int)(nodeNumber*dataOverhead)];
     octree myOct2(32,2,centre,range,&nodeBuffer3[0],(int)(nodeNumber*dataOverhead));
     Eigen::Vector3f randVec(2.0*(float)rand()/RAND_MAX,2.0*(float)rand()/RAND_MAX,2.0*(float)rand()/RAND_MAX);
     randVec -= Eigen::Vector3f(1,1,1);
@@ -102,6 +103,9 @@ int main(int argc, char** argv) {
         data.point = curPos;
         myOct2.remove(data);
     }
+    clock_t end = clock();
+    double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
+    cout << "list times 2 : " << elapsed_secs << endl;
     cout << "finished";
     cout << "finished";
 

@@ -4,6 +4,7 @@
 #include <eigen3/Eigen/Geometry>
 #include <limits>
 #include <queue>
+#include <iostream>
 
 class octree{
 #define ISLEAF (1<<0)
