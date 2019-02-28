@@ -39,7 +39,6 @@ public: class node{
     public:
         Eigen::Vector3f min;
         Eigen::Vector3f max;
-
         void downScale(int direction);
         int whichDir(Eigen::Vector3f pointIn);
         void upScale(node* aNode);
@@ -61,6 +60,7 @@ public: class node{
 
     int levels;
     int batch;
+    bounds topLevelBound;
 
 
     Eigen::Vector3f centre;
@@ -87,7 +87,8 @@ public: class node{
     node* allocateNode(node *parentIn);
     void deallocateNode(node* aNode);
     void initLeaf(node* aNode);
-    int remove(dataPtr data);
+    bool remove(dataPtr data);
+    void iterateDecCount(node* aNode, int countDec);
     bool isLeaf(node* aNode){
         return (aNode->nodeInfo & ISLEAF)!=0;
     }
@@ -113,19 +114,22 @@ public: class node{
     int compact(node* aNode);
     int cullNode(node* aNode);
     float spaceLeft() { return (float)freeNodeStackPtr/totalNodes;}
-
+    octree::node* getNode(dataPtr data);
+    octree::node* getNode(node* aNode, bounds &bound, dataPtr data);
     std::vector<octree::dataPtr> getNnearest(Eigen::Vector3f point, int N);
-
-    octree::dataPtr getNearest(Eigen::Vector3f target);
     Eigen::Vector3f nearestPointOnCube(Eigen::Vector3f point, octree::bounds  bound);
     octree::node* getWouldBeNode(node *aNode, Eigen::Vector3f target, bounds &bound);
-    void putOnQueue(node* aNode);
-
+    octree::bounds defaultBounds();
 };
 
  inline bool operator >(const octree::distAndPointer &lhs,const octree::distAndPointer &rhs)
 {
     return lhs.dist > rhs.dist;
+}
+
+ inline bool operator ==(const octree::dataPtr &lhs,const octree::dataPtr &rhs)
+{
+    return lhs.data == rhs.data && lhs.point == rhs.point;
 }
 
 

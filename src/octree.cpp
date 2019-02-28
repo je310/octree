@@ -20,6 +20,9 @@ octree::octree(int maxLevels, int batching, Eigen::Vector3f centrePoint, float e
         scrap->pointers.nodes[0] = &nodeMem[i];
         scrap = scrap->pointers.nodes[0];
     }
+
+    topLevelBound.max = centre + Eigen::Vector3f(range,range,range);
+    topLevelBound.min = centre - Eigen::Vector3f(range,range,range);
 }
 
 
@@ -72,9 +75,7 @@ int octree::insert(node* aNode,dataPtr data, bounds bound,int depth){
     }
 }
 int octree::insert(dataPtr data){
-    bounds bound;
-    bound.max = centre + Eigen::Vector3f(range,range,range);
-    bound.min = centre - Eigen::Vector3f(range,range,range);
+    bounds bound= defaultBounds();
     int depthInserted = insert(head,data,bound,1);
     return depthInserted;
 }
@@ -88,18 +89,93 @@ void octree::initLeaf(node* aNode){
 }
 
 
-int octree::remove(dataPtr data ){
-
+bool octree::remove(dataPtr data ){
+    node* aNode = getNode(data);
+    if(aNode != NULL){
+        int countDec = 0;
+        if(aNode->pointers.data.data[0] == data){
+            aNode->pointers.data.data[0].data = NULL;
+            countDec ++;
+        }
+        if(aNode->pointers.data.data[1]  == data){
+            aNode->pointers.data.data[1].data = NULL;
+            countDec ++;
+        }
+        iterateDecCount(aNode,countDec);
+        compact(aNode->parent);
+        return true;
+    }
+    return false;
 }
+
+void octree::iterateDecCount(node* aNode, int countDec){
+    if(aNode != NULL){
+        aNode->dataBelow -= countDec;
+        iterateDecCount(aNode->parent,countDec);
+    }
+    return;
+}
+
+octree::node*  octree::getNode(dataPtr data){
+    bounds bound = defaultBounds();
+    return getNode(head,bound,data);
+}
+
+octree::node*  octree::getNode(node* aNode,bounds &bound,dataPtr data){
+    if(isLeaf(aNode)){
+        if(aNode->pointers.data.data[0] == data){
+            return aNode;
+        }
+        if(aNode->pointers.data.data[1]  == data){
+            return aNode;
+        }
+        return NULL;
+    }
+    else{
+        int dir = bound.whichDir(data.point);
+        bound.downScale(dir);
+        return getNode(aNode->pointers.nodes[dir],bound,data);
+    }
+}
+
 
 
 int octree::redistribute(node* aNode){
 
 }
 
-
+// checks to see if we can remove child notes and move data to this node; only should be called on elements that are one above a leaf level.
+// we also rely on the data structure to be correctly maintained, ie compact called whenever a node is removed etc.
 int octree::compact(node* aNode){
+    if(aNode != NULL){
+        if(aNode->dataBelow <=2 && !isLeaf(aNode)){
+            dataPtr ptrs[2];
+            int ptrsFound = 0;
+            for(int i = 0; i < 8; i++){
+                if(aNode->pointers.nodes[i] != NULL){
+                    if(aNode->pointers.nodes[i]->pointers.data.data[0].data != NULL){
+                        ptrs[ptrsFound] = aNode->pointers.nodes[i]->pointers.data.data[0];
+                        ptrsFound++;
+                    }
+                    if(aNode->pointers.nodes[i]->pointers.data.data[1].data != NULL){
+                        ptrs[ptrsFound] = aNode->pointers.nodes[i]->pointers.data.data[1];
+                        ptrsFound++;
+                    }
 
+                    deallocateNode(aNode->pointers.nodes[i]);
+                    aNode->pointers.nodes[i]  = NULL;
+                    //if(ptrsFound == 2) break;
+                }
+            }
+            initLeaf(aNode);
+            aNode->dataBelow = ptrsFound;
+            for(int i = 0; i < ptrsFound; i++){
+                aNode->pointers.data.data[i] = ptrs[i];
+            }
+
+
+        }
+    }
 }
 
 
@@ -269,6 +345,14 @@ void octree::bounds::upScale(node* aNode){
 
 }
 
+octree::bounds octree::defaultBounds(){
+    bounds bound;
+    bound.max = topLevelBound.max;
+    bound.min = topLevelBound.min;
+    return bound;
+}
+
+
 float octree::bounds::half(int dir){
     return min[dir] + (max[dir] - min[dir])/ 2.0;
 }
@@ -335,10 +419,6 @@ Eigen::Vector3f octree::nearestPointOnCube(Eigen::Vector3f point, octree::bounds
 
 }
 
-void octree::putOnQueue(node* aNode){
-
-}
-
 
 std::vector<octree::dataPtr> octree::getNnearest(Eigen::Vector3f point, int N){
     std::priority_queue<distAndPointer,std::vector<distAndPointer>, std::greater<distAndPointer>  > pq;
@@ -346,28 +426,9 @@ std::vector<octree::dataPtr> octree::getNnearest(Eigen::Vector3f point, int N){
     headDistPtr.aNode = head;
     headDistPtr.bound.max = centre + Eigen::Vector3f(range,range,range);
     headDistPtr.bound.min = centre - Eigen::Vector3f(range,range,range);
-    //preload the head.
-    if(isLeaf(headDistPtr.aNode)){
-        setCheckA(headDistPtr.aNode);
-        setCheckB(headDistPtr.aNode);
-        if(headDistPtr.aNode->pointers.data.data[0].data != NULL){
-            distAndPointer headDistPtrA;
-            headDistPtrA.aNode = headDistPtr.aNode;
-           headDistPtrA.dist = (headDistPtrA.aNode->pointers.data.data[0].point - point).norm();
-           pq.push(headDistPtrA);
-        }
-        if(headDistPtr.aNode->pointers.data.data[1].data != NULL){
-       distAndPointer headDistPtrB;
-       headDistPtrB.aNode = headDistPtr.aNode;
-      headDistPtrB.dist = (headDistPtrB.aNode->pointers.data.data[1].point - point).norm();
-      pq.push(headDistPtrB);
-       }
-    }
-    else{
-        headDistPtr.dist = 0;
-        pq.push(headDistPtr);
-    }
 
+    headDistPtr.dist = 0;
+    pq.push(headDistPtr);
 
     std::vector<octree::dataPtr> returnVec;
     while(!pq.empty() && !(returnVec.size() >= N)){
