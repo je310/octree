@@ -13,6 +13,26 @@ using namespace std;
 typedef octree::node nodeType;
 
 
+union Float_t
+{
+    Float_t(float num = 0.0f) : f(num) {}
+    // Portable extraction of components.
+    bool Negative() const { return (i >> 31) != 0; }
+    int32_t RawMantissa() const { return i & ((1 << 23) - 1); }
+    int32_t RawExponent() const { return (i >> 23) & 0xFF; }
+
+    int32_t i;
+    float f;
+#ifdef _DEBUG
+    struct
+    {   // Bitfields for exploration. Do not use in production code.
+        uint32_t mantissa : 23;
+        uint32_t exponent : 8;
+        uint32_t sign : 1;
+    } parts;
+#endif
+};
+
 int main(int argc, char** argv) {
     int nodeNumber = 3000;
     float dataOverhead = 2;
@@ -73,8 +93,8 @@ int main(int argc, char** argv) {
     }
 
     int toFind = nodeNumber / 2;
-    std::vector<octree::dataPtr> list =  myOct.getNnearest(centre,toFind);
-    list =  myOct.getNnearest(centre,toFind);
+    std::vector<octree::dataPtr> list =  myOct.getNnearest(centre,toFind,3.0*range);
+    list =  myOct.getNnearest(centre,toFind,3.0*range);
     for(int i = 0; i < toFind; i++){
         if(list[i].data != i+1) cout << "wrong order!" << endl;
     }
@@ -105,6 +125,73 @@ int main(int argc, char** argv) {
     }
     clock_t end = clock();
     double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
+
+    // test strange cases
+    // insterting outside the bounds
+    // returning depth of insert == 0 means that the point was not inserted.
+    octree::dataPtr data;
+    data.point = centre + Eigen::Vector3f(1.1*range,1.1*range,1.1*range);
+    data.data = 1;
+    int depthInserted = myOct2.insert(data);
+    if(depthInserted != 0) cout << "there is a problem in correctly managing out of bounds points" << endl;
+
+    //multiple inserts
+    data.point = centre;
+    depthInserted = myOct2.insert(data);
+    depthInserted = myOct2.insert(data);
+    depthInserted = myOct2.insert(data);
+
+    depthInserted = myOct2.remove(data);
+    depthInserted = myOct2.remove(data);
+    depthInserted = myOct2.remove(data);
+
+    //inserting very close numbers
+    Float_t x(0.5);
+    for(int i = 0; i < nodeNumber; i++){
+        data.point = centre + Eigen::Vector3f(x.f,0.5*range,0.5*range);
+        data.data = i+1;
+        depthInserted = myOct2.insert(data);
+        x.i ++;
+    }
+    x = Float_t(0.5);
+    for(int i = 0; i < nodeNumber; i++){
+        data.point = centre + Eigen::Vector3f(x.f,0.5*range,0.5*range);
+        data.data = i+1;
+        depthInserted = myOct2.remove(data);
+        x.i ++;
+    }
+
+    // test the find within constrained range
+    rad = 1.0/nodeNumber;
+    radInc = rad*0.7;
+    for(int i = 0; i < nodeNumber; i++){
+
+        //Eigen::Vector3f randVec(1.0*(float)rand()/RAND_MAX,1.0*(float)rand()/RAND_MAX,1.0*(float)rand()/RAND_MAX);
+        Eigen::Vector3f randVec(2.0*(float)rand()/RAND_MAX,2.0*(float)rand()/RAND_MAX,2.0*(float)rand()/RAND_MAX);
+        randVec -= Eigen::Vector3f(1,1,1);
+        randVec.normalize();
+        dataBuffer[i] = i+1;
+        octree::dataPtr data;
+        data.data = dataBuffer[i];
+        data.point = rad*randVec + centre;
+        int depth = myOct2.insert(data);
+        rad += radInc;
+
+    }
+
+    toFind = nodeNumber;
+    list =  myOct.getNnearest(centre,toFind,range/4);
+    int errorCount = 0;
+    for(int i = 0; i < list.size(); i++){
+        float dist = (list[i].point - centre).norm();
+        if(dist > range/4){
+            errorCount ++;
+            cout << "outside range!" << endl;
+        }
+    }
+
+
+    cout << "error count" << errorCount <<endl;
     cout << "list times 2 : " << elapsed_secs << endl;
     cout << "finished";
     cout << "finished";

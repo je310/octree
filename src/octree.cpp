@@ -32,7 +32,13 @@ int octree::insert(node* aNode,dataPtr data, bounds bound,int depth){
     if(isLeaf(aNode)){
         if(aNode->pointers.data.data[0].data == NULL) aNode->pointers.data.data[0] = data;
         else if(aNode->pointers.data.data[1].data == NULL) aNode->pointers.data.data[1] = data;
-        else { //we used both slots we should expand the tree.
+        else {
+            //check if we have a tripple point match
+            if(data.point == aNode->pointers.data.data[0].point && data.point == aNode->pointers.data.data[1].point){
+                aNode->dataBelow --;
+                return -depth; // returning a negative number is indicative of an error.
+            }
+            //we used both slots we should expand the tree.
             //convert node from leaf to normal, store data and reinsert it lower down.
             aNode->nodeInfo = aNode->nodeInfo & (~ ISLEAF);
             dataPtr A = aNode->pointers.data.data[0];
@@ -74,9 +80,19 @@ int octree::insert(node* aNode,dataPtr data, bounds bound,int depth){
         return retDepth = insert(aNode->pointers.nodes[dataDir], data, bound,depth+1);
     }
 }
+
+bool octree::isInBound(octree::bounds bound, octree::dataPtr data){
+    Eigen::Vector3f closestPoint = nearestPointOnCube(data.point,bound);
+    if(closestPoint ==  data.point) return true;
+    return false;
+}
+
 int octree::insert(dataPtr data){
     bounds bound= defaultBounds();
-    int depthInserted = insert(head,data,bound,1);
+    int depthInserted = 0;
+    if(isInBound(bound,data)){
+        depthInserted = insert(head,data,bound,depthInserted+1);
+    }
     return depthInserted;
 }
 
@@ -130,7 +146,7 @@ octree::node*  octree::getNode(node* aNode,bounds &bound,dataPtr data){
         if(aNode->pointers.data.data[0] == data){
             return aNode;
         }
-        if(aNode->pointers.data.data[1]  == data){
+        else if(aNode->pointers.data.data[1]  == data){
             return aNode;
         }
         return NULL;
@@ -464,21 +480,24 @@ Eigen::Vector3f octree::nearestPointOnCube(Eigen::Vector3f point, octree::bounds
 }
 
 
-std::vector<octree::dataPtr> octree::getNnearest(Eigen::Vector3f point, int N){
+std::vector<octree::dataPtr> octree::getNnearest(Eigen::Vector3f point, int N, float radius){
     std::priority_queue<distAndPointer,std::vector<distAndPointer>, std::greater<distAndPointer>  > pq;
     distAndPointer headDistPtr;
     headDistPtr.aNode = head;
     headDistPtr.bound.max = centre + Eigen::Vector3f(range,range,range);
     headDistPtr.bound.min = centre - Eigen::Vector3f(range,range,range);
 
-    headDistPtr.dist = 0;
+    headDistPtr.dist=  (point - nearestPointOnCube(point, headDistPtr.bound)).norm();
+    float dist = headDistPtr.dist;
     pq.push(headDistPtr);
     std::vector<node*> touchedVec;
 
     std::vector<octree::dataPtr> returnVec;
-    while(!pq.empty() && !(returnVec.size() >= N)){
+    while(!pq.empty() && !(returnVec.size() >= N)  && dist < radius){
+
         distAndPointer toConsider = pq.top();
         pq.pop();
+        dist = toConsider.dist;
         if(isLeaf(toConsider.aNode) && (!hasCheckB(toConsider.aNode) || !hasCheckA(toConsider.aNode))){
 
             setCheckA(toConsider.aNode);
@@ -546,4 +565,5 @@ std::vector<octree::dataPtr> octree::getNnearest(Eigen::Vector3f point, int N){
     return returnVec;
 
 }
+
 
