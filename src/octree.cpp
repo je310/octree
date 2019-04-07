@@ -1,6 +1,10 @@
 #include "octree.h"
 
+
 octree::octree(int maxLevels, int batching, Eigen::Vector3f centrePoint, float edgeLength, node* nodeBuffer, int nodes){
+    nullDataPtrdata.data = 0;
+    nullDataPtrdata.point = Eigen::Vector3f(std::numeric_limits<float>::max(),std::numeric_limits<float>::max(),std::numeric_limits<float>::max());
+
     levels = maxLevels;
     batch = batching;
     centre = centrePoint;
@@ -30,8 +34,8 @@ int octree::insert(node* aNode,dataPtr data, bounds bound,int depth){
     aNode->dataBelow ++;
     int retDepth = depth;
     if(isLeaf(aNode)){
-        if(aNode->pointers.data.data[0].data == NULL) aNode->pointers.data.data[0] = data;
-        else if(aNode->pointers.data.data[1].data == NULL) aNode->pointers.data.data[1] = data;
+        if(aNode->pointers.data.data[0] == nullDataPtrdata) aNode->pointers.data.data[0] = data;
+        else if(aNode->pointers.data.data[1] == nullDataPtrdata) aNode->pointers.data.data[1] = data;
         else {
             //check if we have a tripple point match
             if(data.point == aNode->pointers.data.data[0].point && data.point == aNode->pointers.data.data[1].point){
@@ -99,8 +103,9 @@ int octree::insert(dataPtr data){
 void octree::initLeaf(node* aNode){
     aNode->nodeInfo  = 0;
     aNode->nodeInfo = head->nodeInfo | ISLEAF;
-    for(int i = 0; i < 8; i++){
-        aNode->pointers.nodes[i] = NULL;
+    for(int i = 0; i < 2; i++){
+        aNode->pointers.data.data[i].data = nullDataPtrdata.data;
+        aNode->pointers.data.data[i].point = nullDataPtrdata.point;
     }
     aNode->dataBelow = 0;
 }
@@ -111,12 +116,15 @@ bool octree::remove(dataPtr data ){
     if(aNode != NULL){
         if(!isLeaf(aNode)) std::cout << "removing not a leaf!";
         int countDec = 0;
-        if(aNode->pointers.data.data[0] == data){
-            aNode->pointers.data.data[0].data = NULL;
-            countDec ++;
-        }
         if(aNode->pointers.data.data[1]  == data){
-            aNode->pointers.data.data[1].data = NULL;
+                    aNode->pointers.data.data[1].data =  nullDataPtrdata.data;
+                    aNode->pointers.data.data[1].point = nullDataPtrdata.point;
+                    countDec ++;
+                }
+
+        else if(aNode->pointers.data.data[0] == data){
+            aNode->pointers.data.data[0].data = nullDataPtrdata.data;
+            aNode->pointers.data.data[0].point = nullDataPtrdata.point;
             countDec ++;
         }
         if(countDec == 2) std::cout << "duplicated data at node" <<std::endl;
@@ -124,7 +132,10 @@ bool octree::remove(dataPtr data ){
         compact(aNode->parent);
         return true;
     }
-    else  std::cout << "requested missing data";
+    else{
+
+        std::cout << "requested missing data" << std::endl;
+    }
     return false;
 }
 
@@ -182,13 +193,13 @@ int octree::compact(node* aNode){
                 if(aNode->pointers.nodes[i] != NULL){
                     nodesCount ++;
                     int localCount = 0;
-                    if(aNode->pointers.nodes[i]->pointers.data.data[0].data != NULL){
+                    if(!(aNode->pointers.nodes[i]->pointers.data.data[0] == nullDataPtrdata)){
                         ptrs[ptrsFound] = aNode->pointers.nodes[i]->pointers.data.data[0];
                         aNode->pointers.nodes[i]->dataBelow --;
                         localCount++;
                         ptrsFound++;
                     }
-                    if(aNode->pointers.nodes[i]->pointers.data.data[1].data != NULL){
+                    if(!(aNode->pointers.nodes[i]->pointers.data.data[1] == nullDataPtrdata)){
                         ptrs[ptrsFound] = aNode->pointers.nodes[i]->pointers.data.data[1];
                         aNode->pointers.nodes[i]->dataBelow --;
                         localCount++;
@@ -478,6 +489,193 @@ Eigen::Vector3f octree::nearestPointOnCube(Eigen::Vector3f point, octree::bounds
     return retVec;
 
 }
+std::vector<octree::dataPtr> octree::getNnearestBiased(Eigen::Vector3f point,Eigen::Vector3f BiasPoint, int N, float radius, float biasGain){
+    std::priority_queue<distAndPointer,std::vector<distAndPointer>, std::greater<distAndPointer>  > pq;
+    distAndPointer headDistPtr;
+    headDistPtr.aNode = head;
+    headDistPtr.bound.max = centre + Eigen::Vector3f(range,range,range);
+    headDistPtr.bound.min = centre - Eigen::Vector3f(range,range,range);
+
+    headDistPtr.dist=  biasGain*(BiasPoint - nearestPointOnCube(point, headDistPtr.bound)).norm() + (point - nearestPointOnCube(point, headDistPtr.bound)).norm();
+    float dist = headDistPtr.dist;
+    pq.push(headDistPtr);
+    std::vector<node*> touchedVec;
+
+    std::vector<octree::dataPtr> returnVec;
+    while(!pq.empty() && !(returnVec.size() >= N)  && dist < radius){
+
+        distAndPointer toConsider = pq.top();
+        pq.pop();
+        dist = toConsider.dist;
+        if(isLeaf(toConsider.aNode) && (!hasCheckB(toConsider.aNode) || !hasCheckA(toConsider.aNode))){
+
+            setCheckA(toConsider.aNode);
+            setCheckB(toConsider.aNode);
+            if(!(toConsider.aNode->pointers.data.data[0] == nullDataPtrdata)){
+                distAndPointer distAndPointA;
+                distAndPointA.aNode = toConsider.aNode;
+                distAndPointA.bound = toConsider.bound;
+                distAndPointA.dist = biasGain*(distAndPointA.aNode->pointers.data.data[0].point - BiasPoint).norm()+ (distAndPointA.aNode->pointers.data.data[0].point - point).norm();
+                pq.push(distAndPointA);
+            }
+            if(!(toConsider.aNode->pointers.data.data[1] == nullDataPtrdata)){
+                distAndPointer distAndPointB;
+                distAndPointB.aNode = toConsider.aNode;
+                distAndPointB.bound = toConsider.bound;
+                distAndPointB.dist = biasGain*(distAndPointB.aNode->pointers.data.data[1].point - BiasPoint).norm()+(distAndPointB.aNode->pointers.data.data[1].point - point).norm();
+                pq.push(distAndPointB);
+            }
+        }
+        else if(isLeaf(toConsider.aNode)){
+
+            // work out if it is the left or right one.
+            float distA =std::numeric_limits<float>::max();
+            if(!(toConsider.aNode->pointers.data.data[0] == nullDataPtrdata)) distA = biasGain*(toConsider.aNode->pointers.data.data[0].point - BiasPoint).norm()+(toConsider.aNode->pointers.data.data[0].point - point).norm();
+
+            float distB =std::numeric_limits<float>::max();
+            if(!(toConsider.aNode->pointers.data.data[1] == nullDataPtrdata)) distB = biasGain*(toConsider.aNode->pointers.data.data[1].point - BiasPoint).norm()+(toConsider.aNode->pointers.data.data[1].point - point).norm();
+
+            if(distA == toConsider.dist){
+                returnVec.push_back(toConsider.aNode->pointers.data.data[0]);
+
+            }
+            else if(distB == toConsider.dist){
+                returnVec.push_back(toConsider.aNode->pointers.data.data[1]);
+            }
+            touchedVec.push_back(toConsider.aNode);
+
+            continue;
+        }
+        //this  is an octant node. put the children on the list, with the dist value set to the minimum possible.
+        else if(!isLeaf(toConsider.aNode)){
+            for(int i = 0; i < 8; i++){
+                if(toConsider.aNode->pointers.nodes[i] != NULL){
+                    distAndPointer thisDistAndPtr;
+                    thisDistAndPtr.bound = toConsider.bound;
+                    thisDistAndPtr.bound.downScale(i);
+                    thisDistAndPtr.aNode = toConsider.aNode->pointers.nodes[i];
+                    thisDistAndPtr.dist = biasGain*(BiasPoint - nearestPointOnCube(point, thisDistAndPtr.bound)).norm() +(point - nearestPointOnCube(point, thisDistAndPtr.bound)).norm();
+                    pq.push(thisDistAndPtr);
+                }
+            }
+        }
+    }
+    //tidy up checked markers, only elements in the list or in the final vector should have been tagged.
+    while(!pq.empty()){
+        clearCheckA(pq.top().aNode);
+        clearCheckB(pq.top().aNode);
+        pq.pop();
+    }
+    for(int i = 0; i < touchedVec.size(); i++){
+        clearCheckA(touchedVec[i]);
+        clearCheckB(touchedVec[i]);
+    }
+    return returnVec;
+}
+std::vector<octree::dataPtr> octree::getNnearestBiasedVector(Eigen::Vector3f point,std::vector<Eigen::Vector3f> BiasPoints, int N, float radius, std::vector<float> biasGains){
+    std::priority_queue<distAndPointer,std::vector<distAndPointer>, std::greater<distAndPointer>  > pq;
+    distAndPointer headDistPtr;
+    headDistPtr.aNode = head;
+    headDistPtr.bound.max = centre + Eigen::Vector3f(range,range,range);
+    headDistPtr.bound.min = centre - Eigen::Vector3f(range,range,range);
+
+    headDistPtr.dist= (point - nearestPointOnCube(point, headDistPtr.bound)).norm();
+    for(int i = 0; i < BiasPoints.size(); i++){
+       headDistPtr.dist +=  biasGains[i]*(BiasPoints[i] - nearestPointOnCube(point, headDistPtr.bound)).norm();
+    }
+    float dist = headDistPtr.dist;
+    pq.push(headDistPtr);
+    std::vector<node*> touchedVec;
+
+    std::vector<octree::dataPtr> returnVec;
+    while(!pq.empty() && !(returnVec.size() >= N)  && dist < radius){
+
+        distAndPointer toConsider = pq.top();
+        pq.pop();
+        dist = toConsider.dist;
+        if(isLeaf(toConsider.aNode) && (!hasCheckB(toConsider.aNode) || !hasCheckA(toConsider.aNode))){
+
+            setCheckA(toConsider.aNode);
+            setCheckB(toConsider.aNode);
+            if(!(toConsider.aNode->pointers.data.data[0] == nullDataPtrdata)){
+                distAndPointer distAndPointA;
+                distAndPointA.aNode = toConsider.aNode;
+                distAndPointA.bound = toConsider.bound;
+                distAndPointA.dist= (distAndPointA.aNode->pointers.data.data[0].point - point).norm();
+                for(int i = 0; i < BiasPoints.size(); i++){
+                   distAndPointA.dist +=  biasGains[i]*(distAndPointA.aNode->pointers.data.data[0].point - BiasPoints[i]).norm();
+                }
+                pq.push(distAndPointA);
+            }
+            if(!(toConsider.aNode->pointers.data.data[1] == nullDataPtrdata)){
+                distAndPointer distAndPointB;
+                distAndPointB.aNode = toConsider.aNode;
+                distAndPointB.bound = toConsider.bound;
+                distAndPointB.dist= (distAndPointB.aNode->pointers.data.data[1].point - point).norm();
+                for(int i = 0; i < BiasPoints.size(); i++){
+                   distAndPointB.dist +=  biasGains[i]*(distAndPointB.aNode->pointers.data.data[1].point - BiasPoints[i]).norm();
+                }
+                pq.push(distAndPointB);
+            }
+        }
+        else if(isLeaf(toConsider.aNode)){
+
+            // work out if it is the left or right one.
+            float distA =std::numeric_limits<float>::max();
+            if(!(toConsider.aNode->pointers.data.data[0] == nullDataPtrdata)){
+                distA= (toConsider.aNode->pointers.data.data[0].point - point).norm();
+                for(int i = 0; i < BiasPoints.size(); i++){
+                   distA +=  biasGains[i]*(toConsider.aNode->pointers.data.data[0].point - BiasPoints[i]).norm();
+                }
+            }
+
+            float distB =std::numeric_limits<float>::max();
+            if(!(toConsider.aNode->pointers.data.data[1] == nullDataPtrdata)){
+                distB= (toConsider.aNode->pointers.data.data[1].point - point).norm();
+                for(int i = 0; i < BiasPoints.size(); i++){
+                   distB +=  biasGains[i]*(toConsider.aNode->pointers.data.data[1].point - BiasPoints[i]).norm();
+                }
+            }
+            if(distA == toConsider.dist){
+                returnVec.push_back(toConsider.aNode->pointers.data.data[0]);
+
+            }
+            else if(distB == toConsider.dist){
+                returnVec.push_back(toConsider.aNode->pointers.data.data[1]);
+            }
+            touchedVec.push_back(toConsider.aNode);
+
+            continue;
+        }
+        //this  is an octant node. put the children on the list, with the dist value set to the minimum possible.
+        else if(!isLeaf(toConsider.aNode)){
+            for(int i = 0; i < 8; i++){
+                if(toConsider.aNode->pointers.nodes[i] != NULL){
+                    distAndPointer thisDistAndPtr;
+                    thisDistAndPtr.bound = toConsider.bound;
+                    thisDistAndPtr.bound.downScale(i);
+                    thisDistAndPtr.aNode = toConsider.aNode->pointers.nodes[i];
+                    thisDistAndPtr.dist= (point - nearestPointOnCube(point, thisDistAndPtr.bound)).norm();
+                    for(int i = 0; i < BiasPoints.size(); i++){
+                       thisDistAndPtr.dist += biasGains[i]*(BiasPoints[i] - nearestPointOnCube(point, thisDistAndPtr.bound)).norm();
+                    }
+                    pq.push(thisDistAndPtr);
+                }
+            }
+        }
+    }
+    //tidy up checked markers, only elements in the list or in the final vector should have been tagged.
+    while(!pq.empty()){
+        clearCheckA(pq.top().aNode);
+        clearCheckB(pq.top().aNode);
+        pq.pop();
+    }
+    for(int i = 0; i < touchedVec.size(); i++){
+        clearCheckA(touchedVec[i]);
+        clearCheckB(touchedVec[i]);
+    }
+    return returnVec;
+}
 
 
 std::vector<octree::dataPtr> octree::getNnearest(Eigen::Vector3f point, int N, float radius){
@@ -502,14 +700,14 @@ std::vector<octree::dataPtr> octree::getNnearest(Eigen::Vector3f point, int N, f
 
             setCheckA(toConsider.aNode);
             setCheckB(toConsider.aNode);
-            if(toConsider.aNode->pointers.data.data[0].data != NULL){
+            if(!(toConsider.aNode->pointers.data.data[0] == nullDataPtrdata)){
                 distAndPointer distAndPointA;
                 distAndPointA.aNode = toConsider.aNode;
                 distAndPointA.bound = toConsider.bound;
                 distAndPointA.dist = (distAndPointA.aNode->pointers.data.data[0].point - point).norm();
                 pq.push(distAndPointA);
             }
-            if(toConsider.aNode->pointers.data.data[1].data != NULL){
+            if(!(toConsider.aNode->pointers.data.data[1] == nullDataPtrdata)){
                 distAndPointer distAndPointB;
                 distAndPointB.aNode = toConsider.aNode;
                 distAndPointB.bound = toConsider.bound;
@@ -519,13 +717,12 @@ std::vector<octree::dataPtr> octree::getNnearest(Eigen::Vector3f point, int N, f
         }
         else if(isLeaf(toConsider.aNode)){
 
-
             // work out if it is the left or right one.
             float distA =std::numeric_limits<float>::max();
-            if(toConsider.aNode->pointers.data.data[0].data != NULL) distA = (toConsider.aNode->pointers.data.data[0].point - point).norm();
+            if(!(toConsider.aNode->pointers.data.data[0] == nullDataPtrdata)) distA = (toConsider.aNode->pointers.data.data[0].point - point).norm();
 
             float distB =std::numeric_limits<float>::max();
-            if(toConsider.aNode->pointers.data.data[1].data != NULL) distB = (toConsider.aNode->pointers.data.data[1].point - point).norm();
+            if(!(toConsider.aNode->pointers.data.data[1] == nullDataPtrdata)) distB = (toConsider.aNode->pointers.data.data[1].point - point).norm();
 
             if(distA == toConsider.dist){
                 returnVec.push_back(toConsider.aNode->pointers.data.data[0]);
@@ -564,6 +761,19 @@ std::vector<octree::dataPtr> octree::getNnearest(Eigen::Vector3f point, int N, f
     }
     return returnVec;
 
+}
+
+bool octree::reset(){
+    initLeaf(head);
+    scrapHead = &head[1];
+    node* scrap = scrapHead;
+    for(int i = 2; i < totalNodes; i++){
+        scrap->pointers.nodes[0] = &head[i];
+        scrap = scrap->pointers.nodes[0];
+    }
+    freeNodeStackPtr = 1;
+    currentDepth = 1;
+    freeNodeCount = totalNodes - 1;
 }
 
 

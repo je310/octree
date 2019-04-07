@@ -17,6 +17,7 @@ public: struct dataPtr{
         Eigen::Vector3f point;
         int data;
     };
+
     struct dataPtrs{
         dataPtr data[2];
     };
@@ -66,6 +67,7 @@ public: class node{
 
     Eigen::Vector3f centre;
     float range;
+    dataPtr nullDataPtrdata;
 
     int freeNodeStackPtr;
     int freeNodeCount;
@@ -118,11 +120,14 @@ public: class node{
     octree::node* getNode(dataPtr data);
     octree::node* getNode(node* aNode, bounds &bound, dataPtr data);
     std::vector<octree::dataPtr> getNnearest(Eigen::Vector3f point, int N, float radius);
+    std::vector<octree::dataPtr> getNnearestBiased(Eigen::Vector3f point, Eigen::Vector3f BiasPoint, int N, float radius, float biasGain);
+    std::vector<octree::dataPtr> getNnearestBiasedVector(Eigen::Vector3f point,std::vector<Eigen::Vector3f> BiasPoints, int N, float radius, std::vector<float> biasGains);
     std::vector<octree::dataPtr> getInsideRadius(Eigen::Vector3f point, float radius);
     Eigen::Vector3f nearestPointOnCube(Eigen::Vector3f point, octree::bounds  bound);
     octree::node* getWouldBeNode(node *aNode, Eigen::Vector3f target, bounds &bound);
     octree::bounds defaultBounds();
     bool isInBound(octree::bounds bound, octree::dataPtr data);
+    bool reset();
 };
 
 inline bool operator >(const octree::distAndPointer &lhs,const octree::distAndPointer &rhs)
